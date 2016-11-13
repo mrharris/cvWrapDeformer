@@ -6,7 +6,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/modules)
 SET(SOURCE_FILES
     "pluginMain.cpp"
     "cvWrapCmd.cpp"
-	"cvWrapCmd.h"
+    "cvWrapCmd.h"
     "cvWrapDeformer.cpp"
     "cvWrapDeformer.h")
 
@@ -19,6 +19,7 @@ target_link_libraries(${PROJECT_NAME} ${MAYA_LIBRARIES})
 
 MAYA_PLUGIN(${PROJECT_NAME})
 
+# using modules from https://github.com/chadmv/cgcmake
 # cd build
 # cmake -G "Visual Studio 14 2015 Win64" -DMAYA_VERSION=2017 ../src
 # cmake --build . --config Release
