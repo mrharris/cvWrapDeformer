@@ -15,6 +15,14 @@ public:
 	static MTypeId id;
 	const static char* kName;
 
+	static MObject aDriverGeo; // wrap mesh
+	static MObject aBindData; // per input
+	static MObject aSampleComponents; // vert ids crawling out
+	static MObject aSampleWeights; // weights for each of those verts
+	static MObject aTriangleVerts;
+	static MObject aBarycentricWeights;
+	static MObject aBindMatrix; 
+
 protected:
 private:
 };
