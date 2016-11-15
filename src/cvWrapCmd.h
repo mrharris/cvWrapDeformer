@@ -2,6 +2,10 @@
 
 #include <maya/MArgList.h>
 #include <maya/MPxCommand.h>
+#include <maya/MDagPath.h>
+#include <maya/MDagPathArray.h>
+#include <maya/MSelectionList.h>
+#include <maya/MDGModifier.h>
 
 class CVWrapCmd: public MPxCommand
 {
@@ -15,6 +19,22 @@ public:
 	static MSyntax newSyntax();
 
 	const static char* kName;
+
+	// command flags
+	const static char *kNameFlagShort, *kNameFlagLong;
 protected:
 private:
+	MString name_; // name of the cvWrap node to create
+	MDagPath pathDriver_;  // path to the wrap shape
+	MDagPathArray pathDriven_; // paths to the shapes that are wrapped
+	MSelectionList selectionList_; // selected command input nodes
+	MDGModifier dgMod_;
+	MObject cvWrapNode_; 
+
+	// gather all the command arguments and sets necessary command states
+	MStatus GatherCommandArguments(const MArgList& args);
+	// gather the driver and driven(s) dag paths from the input selection list
+	MStatus GetGeometryPaths();
+	// ensures the given dag path points to a shape node even if a transform is passed
+	MStatus GetShapeNode(MDagPath path, bool intermediate=false);
 };
