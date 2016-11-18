@@ -25,6 +25,7 @@ public:
 protected:
 private:
 	MString name_; // name of the cvWrap node to create
+	MObject oWrapNode_; // the cvWrap node in focus
 	MDagPath pathDriver_;  // path to the wrap shape
 	MDagPathArray pathDriven_; // paths to the shapes that are wrapped
 	MSelectionList selectionList_; // selected command input nodes
@@ -37,4 +38,6 @@ private:
 	MStatus GetGeometryPaths();
 	// ensures the given dag path points to a shape node even if a transform is passed
 	MStatus GetShapeNode(MDagPath path, bool intermediate=false);
+	// get the latest cvWrap node in the history of te deformed shape
+	MStatus GetLatestWrapNode();
 };

@@ -1,5 +1,5 @@
 # pragma once
-#include "maya\MPxDeformerNode.h"
+#include <maya/MPxDeformerNode.h>
 
 class CVWrap : public MPxDeformerNode
 {

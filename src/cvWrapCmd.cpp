@@ -3,7 +3,9 @@
 #include <maya/MFnDagNode.h>
 #include <maya/MGlobal.h>
 #include <maya/MItSelectionList.h>
+#include <maya/MItDependencyGraph.h>
 
+#include "cvWrapDeformer.h"
 #include "cvWrapCmd.h"
 
 const char* CVWrapCmd::kName = "cvWrap";
@@ -24,25 +26,53 @@ MStatus CVWrapCmd::doIt(const MArgList& args)
 	status = GatherCommandArguments(args);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 	status = GetGeometryPaths();
+	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	// create the deformer
+	MString command = "deformer -type cvWrap -n \"" + name_ + "\"";
+	for (unsigned int i = 0; i < pathDriven_.length(); ++i)
+	{
+		command += " " + pathDriven_[i].partialPathName();
+	}
+	status = dgMod_.commandToExecute(command);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
 
-	// calculate the binding
-
-	// connect the driver mesh to the wrap deformer
-	// and store all binding information on the deformer
 
 	return redoIt();
 }
 
 MStatus CVWrapCmd::undoIt()
 {
-	return MStatus();
+	MStatus status;
+
+	status = dgMod_.undoIt();
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+
+	return MS::kSuccess;
 }
 
 MStatus CVWrapCmd::redoIt()
 {
 	MStatus status;
+
+	// create the wrap deformer node
+	status = dgMod_.doIt();
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+
+	// if we applied to referenced geo the deformed
+	// shape is now a new mesh eg ShapeDeformed. 
+	// Reaquire the path to that new shape
+	status = GetGeometryPaths();
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+
+	// get the created wrap deformer node
+
+	// calculate the binding
+
+	// connect the driver mesh to the wrap deformer
+	// and store all binding information on the deformer
+
+
 	return MS::kSuccess;
 }
 
@@ -85,7 +115,7 @@ MStatus CVWrapCmd::GetGeometryPaths()
 	MStatus status;
 
 	// the driver is selected last
-	status = selectionList_.getDagPath(selectionList_.length() - 1, pathDriver_);
+	status = selectionList_.getDagPath(selectionList_.length() - 1, pathDriver_); // TODO why -1?
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 	status = GetShapeNode(pathDriver_);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
@@ -151,5 +181,35 @@ MStatus CVWrapCmd::GetShapeNode(MDagPath path, bool intermediate/*=false*/)
 		}
 	}
 	return MS::kSuccess;
+}
+
+MStatus CVWrapCmd::GetLatestWrapNode()
+{
+	MStatus status;
+
+	MObject oDriven = pathDriven_[0].node();
+	MItDependencyGraph itDg(oDriven,
+							MFn::kGeometryFilt,
+							MItDependencyGraph::kUpstream,
+							MItDependencyGraph::kDepthFirst,
+							MItDependencyGraph::kNodeLevel,
+							&status);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+
+	MObject oDeformerNode;
+	for (; !itDg.isDone(); itDg.next())
+	{
+		oDeformerNode = itDg.currentItem();
+		MFnDependencyNode fnNode(oDeformerNode, &status);
+		CHECK_MSTATUS_AND_RETURN_IT(status);
+		if (fnNode.typeId() == CVWrap::id)
+		{
+			oWrapNode_ = oDeformerNode;
+			return MS::kSuccess;
+		}
+	}
+
+	// couldn't find a wrap node in this graph
+	return MS::kFailure;
 }
 
