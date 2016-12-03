@@ -44,7 +44,7 @@ MStatus CVWrapCmd::doIt(const MArgList& args)
 MStatus CVWrapCmd::undoIt()
 {
 	MStatus status;
-
+	
 	status = dgMod_.undoIt();
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
@@ -128,7 +128,7 @@ MStatus CVWrapCmd::GetGeometryPaths()
 
 	// get the driven meshes
 	MItSelectionList iter(selectionList_);
-	//CHECK_MSTATUS_AND_RETURN_IT(status);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
 	pathDriven_.clear();
 	for (unsigned int i = 0; i < selectionList_.length()-1; ++i, iter.next())
 	{
