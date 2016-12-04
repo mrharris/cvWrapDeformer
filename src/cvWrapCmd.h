@@ -7,6 +7,7 @@
 #include <maya/MSelectionList.h>
 #include <maya/MDGModifier.h>
 #include <maya/MMeshIntersector.h>
+#include <maya/MPointArray.h>
 
 #include <vector>
 
@@ -18,9 +19,12 @@ struct BaryCoords {
 };
 
 struct BindData {
+	MPointArray driverPoints;
+	std::vector<std::vector<MIntArray>> perFaceTriangleVerts; // per-face per-triangle vtx ids of the driver
 	MMeshIntersector intersector;
 	std::vector<MIntArray> triangleVerts; // each vtx on the deforming mesh stores the 3 vtx ids
 	std::vector<BaryCoords> coords;
+
 };
 
 class CVWrapCmd: public MPxCommand
@@ -56,5 +60,6 @@ private:
 	MStatus GetShapeNode(MDagPath& path, bool intermediate=false);
 	// get the latest cvWrap node in the history of te deformed shape
 	MStatus GetLatestWrapNode();
+	void GetBarycentricCoords(const MPoint& P, const MPoint& A, const MPoint& B, const MPoint& C, BaryCoords& coords);
 	MStatus CalculateBinding(MDagPath& pathDriver_);
 };

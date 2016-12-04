@@ -5,7 +5,7 @@
 #include <maya/MItSelectionList.h>
 #include <maya/MItDependencyGraph.h>
 #include <maya/MItGeometry.h>
-#include <maya/MPointArray.h>
+#include <maya/MFnMesh.h>
 
 #include "cvWrapDeformer.h"
 #include "cvWrapCmd.h"
@@ -230,6 +230,34 @@ MStatus CVWrapCmd::GetLatestWrapNode()
 	return MS::kFailure;
 }
 
+void CVWrapCmd::GetBarycentricCoords(const MPoint& P, const MPoint& A, const MPoint& B, const MPoint& C, BaryCoords& coords)
+{
+	MVector N = (B - A) ^ (C - A);
+	MVector unitN = N.normal();
+
+	// crazy property: N by uN is 2x the triangle area
+	double areaABC = unitN * N;
+
+	if (areaABC == 0.0) {
+		// degenerate triangle, weight 100% one vert
+		coords[0] = 1.0f;
+		coords[1] = 0.0f;
+		coords[2] = 0.0f;
+		return;
+	}
+
+	// compute a
+	double areaPBC = unitN * ((B - P) ^ (C - P));
+	coords[0] = (float)(areaPBC / areaABC);
+
+	// compute b
+	double areaPCA = unitN * ((C - P) ^ (A - P));
+	coords[1] = (float)(areaPCA / areaABC);
+
+	// compute c
+	coords[2] = 1 - (coords[0] + coords[1]);
+}
+
 MStatus CVWrapCmd::CalculateBinding(MDagPath& pathBindMesh)
 {
 	// find the closest point on the wrap mesh corresponding with this point on the deform mesh
@@ -240,6 +268,32 @@ MStatus CVWrapCmd::CalculateBinding(MDagPath& pathBindMesh)
 	auto driverMatrix = pathBindMesh.inclusiveMatrix(); // world matrix
 	status = bindData.intersector.create(oBindMesh, driverMatrix);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
+
+	MFnMesh fnBindMesh(pathBindMesh, &status);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+	fnBindMesh.getPoints(bindData.driverPoints, MSpace::kWorld);
+	bindData.perFaceTriangleVerts.resize(fnBindMesh.numPolygons()); // just resize 1st list to match the num of faces
+
+	MIntArray vertexCount, vertexList;
+	status = fnBindMesh.getVertices(vertexCount, vertexList);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+	MIntArray triangleCounts, triangleVerts;
+	status = fnBindMesh.getTriangles(triangleCounts, triangleVerts);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+	for (unsigned int faceId = 0, triIter = 0; faceId < vertexCount.length(); ++faceId)
+	{
+		// resize second list to match num of tris in this face
+		bindData.perFaceTriangleVerts[faceId].resize(triangleCounts[faceId]);
+		for (int triId = 0; triId < triangleCounts[faceId]; ++triId)
+		{
+			// go through each triangle in this face
+			// store which verts make up each triangle
+			bindData.perFaceTriangleVerts[faceId][triId].setLength(3);
+			bindData.perFaceTriangleVerts[faceId][triId][0] = triangleVerts[triIter++];
+			bindData.perFaceTriangleVerts[faceId][triId][1] = triangleVerts[triIter++];
+			bindData.perFaceTriangleVerts[faceId][triId][2] = triangleVerts[triIter++];
+		}
+	}
 
 	// loop through all the meshes we are driving
 	for (unsigned int geomIndex = 0; geomIndex < pathDriven_.length(); ++geomIndex)
@@ -252,13 +306,21 @@ MStatus CVWrapCmd::CalculateBinding(MDagPath& pathBindMesh)
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
 		// calculate closest point on driver for all input points on driven
-		MPointOnMesh pointOnMesh;
+		MPointOnMesh pointOnDriverMesh;
+		bindData.coords.resize(itGeo.count()); // 1 barycoord per deforming vertex
 		for (unsigned int i = 0; i < inputPoints.length(); ++i)
 		{
-			bindData.intersector.getClosestPoint(inputPoints[i], pointOnMesh);
-			auto closestPoint = MPoint(pointOnMesh.getPoint()) * driverMatrix;
+			bindData.intersector.getClosestPoint(inputPoints[i], pointOnDriverMesh);
+			auto closestPoint = MPoint(pointOnDriverMesh.getPoint()) * driverMatrix;
+			auto closesFaceId = pointOnDriverMesh.faceIndex();
+			auto closestTriangleId = pointOnDriverMesh.triangleIndex();
+			auto closestTriangleVertIds = bindData.perFaceTriangleVerts[closesFaceId][closestTriangleId];
+			GetBarycentricCoords(closestPoint,
+				bindData.driverPoints[closestTriangleVertIds[0]],
+				bindData.driverPoints[closestTriangleVertIds[1]],
+				bindData.driverPoints[closestTriangleVertIds[2]],
+				bindData.coords[i]);
 		}
-
 	}
 
 	return MS::kSuccess;
