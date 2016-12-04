@@ -37,7 +37,7 @@ private:
 	// gather the driver and driven(s) dag paths from the input selection list
 	MStatus GetGeometryPaths();
 	// ensures the given dag path points to a shape node even if a transform is passed
-	MStatus GetShapeNode(MDagPath path, bool intermediate=false);
+	MStatus GetShapeNode(MDagPath& path, bool intermediate=false);
 	// get the latest cvWrap node in the history of te deformed shape
 	MStatus GetLatestWrapNode();
 };

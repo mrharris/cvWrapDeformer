@@ -61,24 +61,30 @@ MStatus CVWrapCmd::redoIt()
 
 	// if we applied to referenced geo the deformed
 	// shape is now a new mesh eg ShapeDeformed. 
-	// Reaquire the path to that new shape
+	// Reaquire the path to that new shape (pathDriven_)
 	status = GetGeometryPaths();
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
-	// get the created wrap deformer node
+	// get the created wrap deformer node (oWrapNode_)
+	status = GetLatestWrapNode();
+	CHECK_MSTATUS_AND_RETURN_IT(status)
 
 	// calculate the binding
 
 	// connect the driver mesh to the wrap deformer
 	// and store all binding information on the deformer
 
+	// return the created node
+	MFnDependencyNode fnNode(oWrapNode_, &status);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+	setResult(fnNode.name());
 
 	return MS::kSuccess;
 }
 
 bool CVWrapCmd::isUndoable() const
 {
-	return false;
+	return true;
 }
 
 void * CVWrapCmd::creator()
@@ -149,7 +155,7 @@ bool IsShapeNode(MDagPath &path)
 		   path.node().hasFn(MFn::kNurbsCurve) ||
 		   path.node().hasFn(MFn::kNurbsSurface);
 }
-MStatus CVWrapCmd::GetShapeNode(MDagPath path, bool intermediate/*=false*/)
+MStatus CVWrapCmd::GetShapeNode(MDagPath& path, bool intermediate/*=false*/)
 {
 	MStatus status;
 
@@ -161,16 +167,18 @@ MStatus CVWrapCmd::GetShapeNode(MDagPath path, bool intermediate/*=false*/)
 
 	if (path.hasFn(MFn::kTransform))
 	{
-		unsigned int shapeCount;
-		status = path.numberOfShapesDirectlyBelow(shapeCount);
-		CHECK_MSTATUS_AND_RETURN_IT(status);
-
+		unsigned int shapeCount = path.childCount();
 		for (unsigned int i = 0; i < shapeCount; ++i)
 		{
-			status = path.extendToShapeDirectlyBelow(i);
+			status = path.push(path.child(i));
 			CHECK_MSTATUS_AND_RETURN_IT(status);
+			if (!IsShapeNode(path))
+			{
+				path.pop();
+				continue;
+			}
 
-			MFnDagNode fnNode(path);
+			MFnDagNode fnNode(path, &status);
 			CHECK_MSTATUS_AND_RETURN_IT(status);
 			if ((!fnNode.isIntermediateObject() && !intermediate) ||
 				(fnNode.isIntermediateObject() && intermediate))
@@ -178,6 +186,8 @@ MStatus CVWrapCmd::GetShapeNode(MDagPath path, bool intermediate/*=false*/)
 				// path now refers to the shape node, job done
 				return MS::kSuccess;
 			}
+			// go to next shape
+			path.pop();
 		}
 	}
 	return MS::kSuccess;
@@ -186,6 +196,10 @@ MStatus CVWrapCmd::GetShapeNode(MDagPath path, bool intermediate/*=false*/)
 MStatus CVWrapCmd::GetLatestWrapNode()
 {
 	MStatus status;
+	if (pathDriven_.length() == 0) {
+		MGlobal::displayError("No driven mesh specified");
+		return MS::kFailure;
+	}
 
 	MObject oDriven = pathDriven_[0].node();
 	MItDependencyGraph itDg(oDriven,
