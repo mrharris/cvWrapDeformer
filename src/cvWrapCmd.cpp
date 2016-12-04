@@ -4,6 +4,8 @@
 #include <maya/MGlobal.h>
 #include <maya/MItSelectionList.h>
 #include <maya/MItDependencyGraph.h>
+#include <maya/MItGeometry.h>
+#include <maya/MPointArray.h>
 
 #include "cvWrapDeformer.h"
 #include "cvWrapCmd.h"
@@ -67,9 +69,10 @@ MStatus CVWrapCmd::redoIt()
 
 	// get the created wrap deformer node (oWrapNode_)
 	status = GetLatestWrapNode();
-	CHECK_MSTATUS_AND_RETURN_IT(status)
+	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	// calculate the binding
+	status = CalculateBinding(pathDriver_);
 
 	// connect the driver mesh to the wrap deformer
 	// and store all binding information on the deformer
@@ -225,5 +228,39 @@ MStatus CVWrapCmd::GetLatestWrapNode()
 
 	// couldn't find a wrap node in this graph
 	return MS::kFailure;
+}
+
+MStatus CVWrapCmd::CalculateBinding(MDagPath& pathBindMesh)
+{
+	// find the closest point on the wrap mesh corresponding with this point on the deform mesh
+	MStatus status;
+
+	BindData bindData;
+	auto oBindMesh = pathBindMesh.node();
+	auto driverMatrix = pathBindMesh.inclusiveMatrix(); // world matrix
+	status = bindData.intersector.create(oBindMesh, driverMatrix);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+
+	// loop through all the meshes we are driving
+	for (unsigned int geomIndex = 0; geomIndex < pathDriven_.length(); ++geomIndex)
+	{
+		// iterate over this specific piece of geometry
+		MItGeometry itGeo(pathDriven_[geomIndex], &status);
+		CHECK_MSTATUS_AND_RETURN_IT(status);
+		MPointArray inputPoints;
+		status = itGeo.allPositions(inputPoints, MSpace::kWorld);
+		CHECK_MSTATUS_AND_RETURN_IT(status);
+
+		// calculate closest point on driver for all input points on driven
+		MPointOnMesh pointOnMesh;
+		for (unsigned int i = 0; i < inputPoints.length(); ++i)
+		{
+			bindData.intersector.getClosestPoint(inputPoints[i], pointOnMesh);
+			auto closestPoint = MPoint(pointOnMesh.getPoint()) * driverMatrix;
+		}
+
+	}
+
+	return MS::kSuccess;
 }
 
